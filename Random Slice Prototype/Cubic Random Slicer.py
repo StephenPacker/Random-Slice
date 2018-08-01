@@ -76,7 +76,7 @@ def porosity_generator(percentage, volume, cube):
 # Generates an angle and slope with which we will use to slice our cube
 def slope_generator():
 
-	angle = random.randrange(79, 81)
+	angle = random.randrange(44, 46)
 	radians = math.radians(angle)
 	slope = math.tan(radians)
 	slope_angle = [slope, angle]

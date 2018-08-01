@@ -117,46 +117,66 @@ def cube_slicer(cube, c_len):
 
 	current_increment = 1  # Since we already filled the middle row.
 
-	slice_plane = slice_builder(cube, slice_plane, current_increment, slope, 'left')
-	slice_plane = slice_builder(cube, slice_plane, current_increment, slope, 'right')
+	slice_plane = right_slice_builder(cube, slice_plane, current_increment, slope, mid_point + c_len, mid_indices)
+	slice_plane = left_slice_builder(cube, slice_plane, current_increment, slope, mid_point, mid_indices)
 
 	print(slice_plane)
 
 
-def slice_builder(cube, slice_plane, current_increment, slope, direction):
+def right_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
 
 	c_len = len(cube)
-
-	mid_point = ((c_len ** 2) / 2) - (((c_len ** 2) / 2) // c_len)  # Middle of a 1D array of length n*n
-	mid_indices = mid_point / c_len  # Middle of a 1D array of length n i.e an x,y,z array in 3D space
-
-	max_slice = (c_len - 1) / 2
+	z_position = mid_indices
+	x_position = mid_indices
 
 	loop_counter = 0
+	max_slice = (c_len - 1) / 2
 
-	if direction == 'right':
-		position = mid_point + c_len
-		loop_range = c_len
-		stepper = 1
-	else:
-		position = mid_point - 1
-		loop_range = -c_len
-		stepper = -1
-
-	while abs(loop_counter) < max_slice:
-		loop_counter += stepper
-		if current_increment >= slope:  # GO VERTICALLY
-			for i in range(position, position + loop_range, stepper):
-				slice_plane[i] = cube[mid_indices + loop_counter][abs(i - position)][mid_indices]
-			current_increment = 0
-		else:  # GO HORIZONTALLY
-			for i in range(position, position + loop_range, stepper):
-				slice_plane[i] = cube[mid_indices][abs(i - position)][mid_indices + loop_counter]
+	while loop_counter < max_slice:
+		if current_increment < slope:  # CI measures rows appended before moving horizontally.
+			z_position += 1
 			current_increment += 1
-
-		position += loop_range
+		else:
+			x_position += 1
+			current_increment = 0
+		for i in range(slice_position, slice_position + c_len):
+			slice_plane[i] = cube[z_position][i - slice_position][x_position]
+		slice_position += c_len
+		loop_counter += 1
 
 	return slice_plane
+
+
+def left_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
+
+	c_len = len(cube)
+	z_position = mid_indices
+	x_position = mid_indices
+
+	loop_counter = 0
+	max_slice = (c_len - 1) / 2
+
+	while loop_counter < max_slice:
+		if current_increment < slope:  # CI measures rows appended before moving horizontally.
+			z_position -= 1
+			current_increment += 1
+		else:
+			x_position -= 1
+			current_increment = 0
+		for i in range(slice_position - c_len, slice_position):
+			slice_plane[i] = cube[z_position][i - (slice_position - c_len)][x_position]
+		slice_position -= c_len
+		loop_counter += 1
+
+	return slice_plane
+
+
+def slice_analyzer(slice):
+	pass
+
+
+def data_writer(porosity):
+	pass
 
 
 # Given an angle, generates a slope
