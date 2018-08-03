@@ -7,6 +7,7 @@ import xlwt
 import matplotlib.pyplot as plt
 
 wb = xlwt.Workbook()
+ws = wb.add_sheet("Random Slice Data")
 
 
 def main():
@@ -25,13 +26,13 @@ def main():
 	radius = radius_finder(images, width, center)
 
 	# Will be based on some sort of REV calculation in the future
-	c_len = 351
+	c_len = 369
 
 	for i in range(0, 2):
 		vertex = vertex_generator(center, radius, c_len)
 		data = cube_generator(vertex, images, c_len, len(images))
-		data_slice = cube_slicer(data[0], c_len, vertex, data[1])
-		visualizer(images, data[1], data_slice, center, radius, c_len)
+		slices = cube_slicer(data[0], c_len, vertex, data[1])
+		visualizer(images, data[1], slices, center, radius, c_len)
 
 
 # This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
@@ -84,7 +85,7 @@ def vertex_generator(center, radius, c_len):
 	return vertices[0]
 
 
-# Generates a cube given a vertex
+# Generates a cube given a vertex (COULD USE SOME TESTING)
 def cube_generator(vertex, images, c_len, stack_height):
 
 	upper_3D_bound = stack_height - c_len
@@ -98,19 +99,20 @@ def cube_generator(vertex, images, c_len, stack_height):
 	for z2 in range(z_position, z_position + c_len):
 		for x2 in range(vertex[0], vertex[0] + c_len):
 			for y2 in range(vertex[1], vertex[1] + c_len):
-				cube[z2 - z1][x2 - x1][y2 - y1] = images[z2][x2][y2]
+				cube[z2 - z1][x2 - x1][y2 - y1] = images[z2][y2][x2]
 
 	data = [cube, z_position]
 
 	return data
 
 
-# This method takes in a ODD SIZED cube and mimics what a sliced plane through its volume would look like.
-# Simplest possible execution, just one half of a zero degree plane, no worries about remainders, left and right halves
-# Numerous different angles etc.
+# This method takes in a ODD SIZED cube and mimics what a sliced plane through its volume would look like. Still a work
+# In progress, needs to implement the remainder system to increase accuracy, modify to work with angles between 90-180
+# And hopefully streamline the code to reduce redundancies of which there are a few.
 def cube_slicer(cube, c_len, vertex, z_position):
 
 	porosities = []
+	slices = []
 
 	slice_plane = np.zeros([c_len**2])  # Try with a 1D array and then reshape it. Maybe easier?
 	mid_point = ((c_len**2)/2) - (((c_len**2)/2)//c_len)  # Middle of a 1D array of length n*n
@@ -119,7 +121,7 @@ def cube_slicer(cube, c_len, vertex, z_position):
 	for i in range(mid_point, mid_point + c_len):
 		slice_plane[i] = cube[mid_indices][i - mid_point][mid_indices]  # Fill middle of plane with cubes values.
 
-	slope = [0, 1, c_len]  # Mimic a 0 and 90 degree angle pairing
+	slope = [0, 1, c_len]  # Mimic a 0, 45, 90 degree angle pairing
 	angle = [0, 45, 90]
 
 	current_increment = 1  # Since we already filled the middle row.
@@ -128,11 +130,14 @@ def cube_slicer(cube, c_len, vertex, z_position):
 		slice_plane = right_slice_builder(cube, slice_plane, current_increment, slope[i], mid_point + c_len, mid_indices)
 		slice_plane = left_slice_builder(cube, slice_plane, current_increment, slope[i], mid_point, mid_indices)
 
+		slice_plane_copy = list(slice_plane)
+		slices.append(slice_plane_copy)
+
 		porosities.append(slice_analyzer(slice_plane))
 
 	data_writer(porosities, vertex, z_position, angle)
 
-	return slice_plane # Will be used for visualization
+	return slices  # Will be used for visualization
 
 
 def right_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
@@ -183,41 +188,46 @@ def left_slice_builder(cube, slice_plane, current_increment, slope, slice_positi
 	return slice_plane
 
 
+# Returns the porosity (non-zero pixels/ zero pixels) of a slice plane
 def slice_analyzer(slice_plane):
 
 	grain_space = np.count_nonzero(slice_plane)
 	return(1 - (grain_space/float(len(slice_plane)))) * 100
 
 
-def data_writer(porosities, vertex, z_position, angle):
+# Writes the porosity data to an excel file for further analysis
+def data_writer(porosities, vertex, z_position, angle, counter=[0]):
 
-	ws = wb.add_sheet("Slice at (%i,%i,%i)" % (vertex[0], vertex[1], z_position))
+	counter[0] += 1
 
-	ws.write(0, 0, "Starting X, Y, Z")
-	ws.write(1, 0, "(%i,%i,%i)" % (vertex[0], vertex[1], z_position))
+	# If its the first time opening the sheet, write the angle information on the top row
+	if counter[0] == 1:
+		ws.write(0, 0, "Angle")
+		for i in range(1, len(angle) + 1):
+			ws.write(0, i, angle[i - 1])
 
-	ws.write(0, 1, "Angle")
-	ws.write(0, 2, "Porosity")
-	for i in range(1, len(angle) + 1):
-		ws.write(i, 1, angle[i - 1])
-		ws.write(i, 2, porosities[i - 1])
+	ws.write(counter[0], 0, "Slice at (%i,%i,%i)" % (vertex[0], vertex[1], z_position))
+	for i in range(1, len(porosities) + 1):
+		ws.write(counter[0], i, porosities[i - 1])
 
 	wb.save("Random_Slice_Data.xls")
 
 
-def visualizer(images, z_position, slice_plane, center, radius, c_len):
+def visualizer(images, z_position, slices, center, radius, c_len):
 
-	cv2.circle(images[z_position], center, radius, 255)
+	angle = [0, 45, 90]
 
-	plt.subplot(1, 2, 1)
+	cv2.circle(images[z_position + c_len/2], center, radius, 255)
+
+	plt.subplot(2, 2, 1)
 	plt.title("CT Image with circular border")
-	plt.imshow(images[z_position], cmap='gray')
+	plt.imshow(images[z_position + c_len/2], cmap='gray')
 
-	# slice_plane.reshape([c_len, c_len])
-	#
-	# plt.subplot(1, 2, 2)
-	# plt.title("Slice")
-	# plt.imshow(slice_plane, cmap='gray')
+	for i in range(0, len(slices)):
+		plt.subplot(2, 2, i + 2)
+		plt.title("Slice at %i degrees" % angle[i])
+		np.reshape(slices[i], [c_len, c_len])
+		plt.imshow(np.reshape(slices[i], [c_len, c_len]), cmap='gray')
 
 	plt.show()
 
