@@ -1,3 +1,7 @@
+# The first working prototype to fulfill my summer NSERC. This prototype has the ability to read in a series of recon.
+# CT images, find a dataset boundary, generate random cubes within the boundary, and slice the cubes at 0, 45, and 90
+# degree angles allowing for visualization and porosity measurements, which are then exported to an excel sheet.
+
 import cv2
 import glob
 import numpy as np
@@ -10,6 +14,8 @@ wb = xlwt.Workbook()
 ws = wb.add_sheet("Random Slice Data")
 
 
+# Main reads in and stores the image files and gets info on there dimensions (used to find data boundary)
+# Controls the number of cubic sections the program will generate.
 def main():
 
 	DIR = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
@@ -140,6 +146,7 @@ def cube_slicer(cube, c_len, vertex, z_position):
 	return slices  # Will be used for visualization
 
 
+# Builds the right side of a slice plane
 def right_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
 
 	c_len = len(cube)
@@ -164,6 +171,7 @@ def right_slice_builder(cube, slice_plane, current_increment, slope, slice_posit
 	return slice_plane
 
 
+# Builds the left side of a slice plane
 def left_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
 
 	c_len = len(cube)
@@ -213,6 +221,7 @@ def data_writer(porosities, vertex, z_position, angle, counter=[0]):
 	wb.save("Random_Slice_Data.xls")
 
 
+# Visualizes the middle section of a cube, followed by three angled sections.
 def visualizer(images, z_position, slices, center, radius, c_len):
 
 	angle = [0, 45, 90]
