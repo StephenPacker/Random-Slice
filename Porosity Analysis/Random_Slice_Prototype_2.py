@@ -25,7 +25,7 @@ def main():
 	# number_of_cycles = raw_input("How many cycles do you wish to do: ")
 	# files = (glob.glob(file_location + "/*" + file_type))
 
-	# Default values used for testing
+	# Default values used for testing P.S. I HATE github
 
 	location = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
 	files = (glob.glob(location + "/*.bmp"))
