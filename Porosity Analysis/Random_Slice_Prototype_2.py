@@ -27,6 +27,7 @@ def main():
 
 	location = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
 	files = (glob.glob(location + "/*.bmp"))
+	number_of_cycles = 2
 
 	images = []
 
@@ -40,8 +41,6 @@ def main():
 
 	# Will be based on some sort of REV calculation in the future
 	c_len = 369
-
-	number_of_cycles = 2
 
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
