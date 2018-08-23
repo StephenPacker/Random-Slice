@@ -25,11 +25,11 @@ def main():
 	# number_of_cycles = raw_input("How many cycles do you wish to do: ")
 	# files = (glob.glob(file_location + "/*" + file_type))
 
-	# Default values used for testing P.S. I HATE github
+	# Default values used for testing
 
 	location = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
 	files = (glob.glob(location + "/*.bmp"))
-	number_of_cycles = 2
+	number_of_cycles = 20
 
 	images = []
 
@@ -41,14 +41,16 @@ def main():
 	center = (int(width // 2), int(height // 2))
 	radius = radius_finder(images, width, center)
 
+	rev_finder(images, radius, center)
+
 	# Will be based on some sort of REV calculation in the future
-	c_len = 369
+	c_len = rev_finder(images, radius, center)
 
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
 		data = cube_generator(vertex, images, c_len, len(images))
 		slices = cube_slicer(data[0], c_len, vertex, data[1])
-		visualizer(images, data[1], slices, center, radius, c_len)
+		# visualizer(images, data[1], slices, center, radius, c_len)
 
 
 # This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
@@ -249,6 +251,55 @@ def visualizer(images, z_position, slices, center, radius, c_len):
 		plt.imshow(np.reshape(slices[i], [c_len, c_len]), cmap='gray')
 
 	plt.show()
+
+
+# Returns a approximate REV which I will use as the length of my cubes. Based on a line growing algorithm, which is
+# rooted in the assumption that a 1D REV will translate in a 3D system, which will work for homogeneous samples only.
+def rev_finder(images, radius, center):
+
+	total_nonzero_pix = 0
+
+	# Currently, I am going to implement the quick and dirty approach. It will be more accurate to go through each
+	# pixel and turn it black before doing non-zero counts, however, this also could probably be done
+	# much faster in Step 2 (Image Pre-Processing, something that needs more work). A very slow procedure.
+
+	# for z in range(0, len(images)):
+	# 	for x in range(0, images[0].shape[0]):
+	# 		for y in range(0, images[0].shape[1]):
+	# 			if np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2) > radius:
+	# 				images[z][y][x] = 0
+
+	# Count total porosity for the data set
+	for i in range(0, len(images)):
+		total_nonzero_pix += np.count_nonzero(images[i])
+
+	volume = math.pi * (radius ** 2) * i
+	total_porosity = por_calc(total_nonzero_pix, volume)
+
+	# Grow a line until it contains a similar porosity to the total i.e a line of REV
+
+	line_holder = []
+
+	for j in range(0, 1000):
+		random_image = random.randrange(0, len(images))
+
+		line = [images[random_image][center[0]][center[1]]]
+		gi = 0  # Growth Incrementer
+
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 or\
+			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[0] - 1:
+
+			gi += 1
+			line.extend([images[random_image][center[0] - gi][center[1] - gi]])
+			line.extend([images[random_image][center[0] + gi][center[1] + gi]])
+
+		line_holder.append(len(line))
+
+	return sum(line_holder) / len(line_holder)
+
+
+def por_calc(bright_pixels, total_pixels):
+	return (1 - (bright_pixels/float(total_pixels))) * 100
 
 
 main()
