@@ -9,6 +9,7 @@ import math
 import random
 import xlwt
 import matplotlib.pyplot as plt
+from xlrd import open_workbook
 
 wb = xlwt.Workbook()
 ws = wb.add_sheet("Random Slice Data")
@@ -25,11 +26,18 @@ def main():
 	# number_of_cycles = raw_input("How many cycles do you wish to do: ")
 	# files = (glob.glob(file_location + "/*" + file_type))
 
+	# old_excel = raw_input("Would you like to add to a new excel file Y OR N: ")
+	# if old_excel == "Y":
+	# 	excel_location = raw_input("Please specify the file path of a previous excel sheet: ")
+	# if old_excel == "N":
+	# 	wb = xlwt.Workbook()
+	# 	ws = wb.add_sheet("Random Slice Data")
+
 	# Default values used for testing
 
 	location = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
 	files = (glob.glob(location + "/*.bmp"))
-	number_of_cycles = 20
+	number_of_cycles = 1
 
 	images = []
 
@@ -230,7 +238,7 @@ def data_writer(porosities, vertex, z_position, angle, counter=[0]):
 	for i in range(1, len(porosities) + 1):
 		ws.write(counter[0], i, porosities[i - 1])
 
-	wb.save("Random_Slice_Data.xls")
+	wb.save("Random_Slice_Data.xlsx")
 
 
 # Visualizes the middle section of a cube, followed by three angled sections.
