@@ -7,12 +7,9 @@ import glob
 import numpy as np
 import math
 import random
-import xlwt
 import matplotlib.pyplot as plt
-from xlrd import open_workbook
-
-wb = xlwt.Workbook()
-ws = wb.add_sheet("Random Slice Data")
+import openpyxl
+from openpyxl import load_workbook
 
 
 # Main reads in and stores the image files and gets info on there dimensions (used to find data boundary)
@@ -26,12 +23,17 @@ def main():
 	# number_of_cycles = raw_input("How many cycles do you wish to do: ")
 	# files = (glob.glob(file_location + "/*" + file_type))
 
-	# old_excel = raw_input("Would you like to add to a new excel file Y OR N: ")
-	# if old_excel == "Y":
-	# 	excel_location = raw_input("Please specify the file path of a previous excel sheet: ")
-	# if old_excel == "N":
-	# 	wb = xlwt.Workbook()
-	# 	ws = wb.add_sheet("Random Slice Data")
+	while True:
+		old_excel = raw_input("Would you like to use an existing excel file Y OR N: ")
+		if old_excel == "Y":
+			wb = load_workbook(raw_input("Please specify the sheet with proper file suffix i.e excel.xlsx: "))
+			break
+		elif old_excel == "N":
+			wb = openpyxl.Workbook()
+			break
+		else:
+			print("Sorry, I didn't understand that.")
+			continue
 
 	# Default values used for testing
 
@@ -57,9 +59,10 @@ def main():
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
 		data = cube_generator(vertex, images, c_len, len(images))
-		slices = cube_slicer(data[0], c_len, vertex, data[1])
+		slices = cube_slicer(data[0], c_len, vertex, data[1], wb)
 		# visualizer(images, data[1], slices, center, radius, c_len)
 
+	wb.save("Random_Slice_Dataaa.xlsx")
 
 # This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
 # the boundary of our CT data) ensuring that we do not included any invalid pixels during future computations.
@@ -135,7 +138,7 @@ def cube_generator(vertex, images, c_len, stack_height):
 # This method takes in a ODD SIZED cube and mimics what a sliced plane through its volume would look like. Still a work
 # In progress, needs to implement the remainder system to increase accuracy, modify to work with angles between 90-180
 # And hopefully streamline the code to reduce redundancies of which there are a few.
-def cube_slicer(cube, c_len, vertex, z_position):
+def cube_slicer(cube, c_len, vertex, z_position, wb):
 
 	porosities = []
 	slices = []
@@ -161,7 +164,7 @@ def cube_slicer(cube, c_len, vertex, z_position):
 
 		porosities.append(slice_analyzer(slice_plane))
 
-	data_writer(porosities, vertex, z_position, angle)
+	data_writer(wb, porosities, vertex, z_position, angle)
 
 	return slices  # Will be used for visualization
 
@@ -224,22 +227,20 @@ def slice_analyzer(slice_plane):
 
 
 # Writes the porosity data to an excel file for further analysis
-def data_writer(porosities, vertex, z_position, angle, counter=[0]):
+def data_writer(wb, porosities, vertex, z_position, angle, counter=[0]):
 
 	counter[0] += 1
 
 	# If its the first time opening the sheet, write the angle information on the top row
 	if counter[0] == 1:
-		ws.write(0, 0, "Angle")
+		ws = wb.create_sheet("Random_Slice_Data")
+		ws.cell(row=1, column=1).value = "Angle"
 		for i in range(1, len(angle) + 1):
-			ws.write(0, i, angle[i - 1])
+			ws.cell(row=1, column=i + 1).value = angle[i - 1]
 
-	ws.write(counter[0], 0, "Slice at (%i,%i,%i)" % (vertex[0], vertex[1], z_position))
+	ws.cell(row=counter[0] + 1, column=1).value = "Slice at (%i,%i,%i)" % (vertex[0], vertex[1], z_position)
 	for i in range(1, len(porosities) + 1):
-		ws.write(counter[0], i, porosities[i - 1])
-
-	wb.save("Random_Slice_Data.xlsx")
-
+		ws.cell(row=counter[0] + 1, column=i + 1).value = porosities[i - 1]
 
 # Visualizes the middle section of a cube, followed by three angled sections.
 def visualizer(images, z_position, slices, center, radius, c_len):
