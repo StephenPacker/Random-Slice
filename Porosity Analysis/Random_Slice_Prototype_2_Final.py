@@ -16,30 +16,35 @@ from openpyxl import load_workbook
 # Controls the number of cubic sections the program will generate.
 def main():
 
-	# This code block removes any hard coding from main.
-
-	# file_location = raw_input("Please specify the file path to where your images are stored: ")
-	# file_type = raw_input("Please specify file type. I.e .bmp: ")
-	# number_of_cycles = raw_input("How many cycles do you wish to do: ")
-	# files = (glob.glob(file_location + "/*" + file_type))
+	file_location = raw_input("Please specify the file path to where your images are stored: ")
+	file_type = raw_input("Please specify the file type. I.e .bmp: ")
+	number_of_cycles = int(raw_input("How many cycles do you wish to do: "))
+	files = (glob.glob(file_location + "/*" + file_type))
 
 	while True:
 		old_excel = raw_input("Would you like to use an existing excel file Y OR N: ")
 		if old_excel == "Y":
-			wb = load_workbook(raw_input("Please specify the sheet with proper file suffix i.e excel.xlsx: "))
+			excel_file = raw_input("Please specify the file name with proper suffix i.e sheet1.xlsx: ")
+			wb = load_workbook(excel_file)
+			ws = wb.create_sheet(wb.worksheets[0].title + " %s" % (len(wb.worksheets)))
+			save_as = excel_file
 			break
 		elif old_excel == "N":
 			wb = openpyxl.Workbook()
+			save_as = raw_input("What would you like to save the excel book as: ")
+			# Generates a sheet title based on file location
+			title = ""
+			for i in range(len(file_location) - 1, 0, -1):
+				if ord(file_location[i]) == 92:  # A back slash in ascii
+					break
+				title += file_location[i]
+			ws = wb.active
+			ws.title = title[::-1]
 			break
+
 		else:
 			print("Sorry, I didn't understand that.")
 			continue
-
-	# Default values used for testing
-
-	location = "C:\Users\spack\Desktop\MicroCT\Practice Data\Salt_1_recon"
-	files = (glob.glob(location + "/*.bmp"))
-	number_of_cycles = 1
 
 	images = []
 
@@ -53,16 +58,15 @@ def main():
 
 	rev_finder(images, radius, center)
 
-	# Will be based on some sort of REV calculation in the future
 	c_len = rev_finder(images, radius, center)
 
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
 		data = cube_generator(vertex, images, c_len, len(images))
-		slices = cube_slicer(data[0], c_len, vertex, data[1], wb)
-		visualizer(images, data[1], slices, center, radius, c_len)
+		slices = cube_slicer(data[0], c_len, vertex, data[1], ws)
+		#visualizer(images, data[1], slices, center, radius, c_len)
 
-	wb.save("Random_Slice_Dataaa.xlsx")
+	wb.save(save_as)
 
 
 # This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
@@ -93,11 +97,13 @@ def is_in_circle(center, radius, vertices):
 	return True
 
 
-# Generates a Vertex and checks to make sure all points of a cube emanating from said vertex fit inside out data set.
+# Generates a vertex and checks to make sure all points of a cube emanating from said vertex fit inside out data set
+# at which point a set of 4 vertices (the base of the cubic section, will be returned.
 def vertex_generator(center, radius, c_len):
 
-	lower_2D_bound = center[0] - radius
-	upper_2D_bound = center[0] + radius
+	# Edges are in reference to the perimeter of the circle delineating the data set boundary
+	left_edge = center[0] - radius
+	right_edge = center[0] + radius
 
 	adders = [[0, 0], [0, c_len], [c_len, 0], [c_len, c_len]]
 
@@ -105,9 +111,7 @@ def vertex_generator(center, radius, c_len):
 
 	while not vertices_in_circle:
 		vertices = []
-		bottom_left_coord = []
-		for i in range(2):
-			bottom_left_coord.append(random.randrange(lower_2D_bound, upper_2D_bound))
+		bottom_left_coord = [random.randrange(left_edge, right_edge), random.randrange(left_edge, right_edge)]
 		for i in range(4):
 			vertices.append([a + b for a, b in zip(bottom_left_coord, adders[i])])
 		vertices_in_circle = is_in_circle(center, radius, vertices)
@@ -139,7 +143,7 @@ def cube_generator(vertex, images, c_len, stack_height):
 # This method takes in a ODD SIZED cube and mimics what a sliced plane through its volume would look like. Still a work
 # In progress, needs to implement the remainder system to increase accuracy, modify to work with angles between 90-180
 # And hopefully streamline the code to reduce redundancies of which there are a few.
-def cube_slicer(cube, c_len, vertex, z_position, wb):
+def cube_slicer(cube, c_len, vertex, z_position, ws):
 
 	porosities = []
 	slices = []
@@ -165,7 +169,7 @@ def cube_slicer(cube, c_len, vertex, z_position, wb):
 
 		porosities.append(slice_analyzer(slice_plane))
 
-	data_writer(wb, porosities, vertex, z_position, angle)
+	data_writer(ws, porosities, vertex, z_position, angle)
 
 	return slices  # Will be used for visualization
 
@@ -228,13 +232,12 @@ def slice_analyzer(slice_plane):
 
 
 # Writes the porosity data to an excel file for further analysis
-def data_writer(wb, porosities, vertex, z_position, angle, counter=[0]):
+def data_writer(ws, porosities, vertex, z_position, angle, counter=[0]):
 
 	counter[0] += 1
 
 	# If its the first time opening the sheet, write the angle information on the top row
 	if counter[0] == 1:
-		ws = wb.create_sheet("Random_Slice_Data")
 		ws.cell(row=1, column=1).value = "Angle"
 		for i in range(1, len(angle) + 1):
 			ws.cell(row=1, column=i + 1).value = angle[i - 1]
@@ -270,16 +273,6 @@ def rev_finder(images, radius, center):
 
 	total_nonzero_pix = 0
 
-	# Currently, I am going to implement the quick and dirty approach. It will be more accurate to go through each
-	# pixel and turn it black before doing non-zero counts, however, this also could probably be done
-	# much faster in Step 2 (Image Pre-Processing, something that needs more work). A very slow procedure.
-
-	# for z in range(0, len(images)):
-	# 	for x in range(0, images[0].shape[0]):
-	# 		for y in range(0, images[0].shape[1]):
-	# 			if np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2) > radius:
-	# 				images[z][y][x] = 0
-
 	# Count total porosity for the data set
 	for i in range(0, len(images)):
 		total_nonzero_pix += np.count_nonzero(images[i])
@@ -309,6 +302,7 @@ def rev_finder(images, radius, center):
 	return sum(line_holder) / len(line_holder)
 
 
+# Given total bright and dark pixels of an image(s), returns the porosity as a percentage
 def por_calc(bright_pixels, total_pixels):
 	return (1 - (bright_pixels/float(total_pixels))) * 100
 
