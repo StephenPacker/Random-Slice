@@ -1,6 +1,8 @@
-# The first working prototype to fulfill my summer NSERC. This prototype has the ability to read in a series of recon.
+# The second working prototype to fulfill my summer NSERC. This prototype has the ability to read in a series of recon.
 # CT images, find a dataset boundary, generate random cubes within the boundary, and slice the cubes at 0, 45, and 90
-# degree angles allowing for visualization and porosity measurements, which are then exported to an excel sheet.
+# degree angles allowing for visualization and porosity measurements, which are then exported to an excel sheet. In the
+# second prototype, I have added a method to automatically compute a REV, added input validation, and re-worked the
+# excel functionally too allow the user to load in old sheets without rewriting existing data.
 
 import cv2
 import glob
@@ -12,27 +14,81 @@ import openpyxl
 from openpyxl import load_workbook
 
 
-# Main reads in and stores the image files and gets info on there dimensions (used to find data boundary)
-# Controls the number of cubic sections the program will generate.
+# Main delegates the loading of image files (specified by a user), handles loading and/or creation of an excel sheet,
+# controls the creation of metadata about the image files (i.e boundaries of data sets, REV of a cube, and dimensions
+# of images) and finally handles the main loop of cube slicing and data processing.
 def main():
 
-	file_location = raw_input("Please specify the file path to where your images are stored: ")
-	file_type = raw_input("Please specify the file type. I.e .bmp: ")
-	number_of_cycles = int(raw_input("How many cycles do you wish to do: "))
-	files = (glob.glob(file_location + "/*" + file_type))
+	images_and_file_location = file_reader()
+	images = images_and_file_location[0]
+	file_location = images_and_file_location[1]
+
+	while True:
+		try:
+			number_of_cycles = int(raw_input("How many cycles do you wish to do: "))
+		except ValueError:
+			print("That was not a valid number....")
+			continue
+		break
+
+	wb_ws_save = excel_reader(file_location)
+	wb = wb_ws_save[0]
+	ws = wb_ws_save[1]
+	save_as = wb_ws_save[2]
+
+	width = images[1].shape[0]
+	height = images[1].shape[1]
+	center = (int(width // 2), int(height // 2))
+	radius = radius_finder(images, width, center)
+
+	c_len = rev_finder(images, radius, center)
+
+	for i in range(0, number_of_cycles):
+		vertex = vertex_generator(center, radius, c_len)
+		data = cube_generator(vertex, images, c_len, len(images))
+		slices = cube_slicer(data[0], c_len, vertex, data[1], ws)
+		#visualizer(images, data[1], slices, center, radius, c_len)
+
+	wb.save(save_as)
+
+
+# Reads in image files specified by the users
+def file_reader():
+
+	while True:
+		file_location = raw_input("Please specify the file path to where your images are stored: ")
+		file_type = raw_input("Please specify the file type. I.e bmp: ")
+		files = (glob.glob(file_location + "/*." + file_type))
+		images = []
+		for img_file in files:
+			images.append(cv2.imread(img_file, 0))
+		if len(images) == 0:
+			print("The folder location or file type you selected were invalid, please try again")
+			continue
+		break
+
+	return images, file_location  # file_location is used for the naming of sheets in a new excel file
+
+
+# Loads in a pre existing excel file or creates a new one for writing based on user input
+def excel_reader(file_location):
 
 	while True:
 		old_excel = raw_input("Would you like to use an existing excel file Y OR N: ")
 		if old_excel == "Y":
-			excel_file = raw_input("Please specify the file name with proper suffix i.e sheet1.xlsx: ")
-			wb = load_workbook(excel_file)
-			ws = wb.create_sheet(wb.worksheets[0].title + " %s" % (len(wb.worksheets)))
-			save_as = excel_file
+			while True:
+				excel_file = raw_input("Please specify the file name with proper suffix i.e sheet1.xlsx: ")
+				try:
+					wb = load_workbook(excel_file)
+					ws = wb.create_sheet(wb.worksheets[0].title + " %s" % (len(wb.worksheets)))
+					save_as = excel_file
+					break
+				except IOError:
+					print("Your specified file does not exist, please try again")
 			break
 		elif old_excel == "N":
 			wb = openpyxl.Workbook()
-			save_as = raw_input("What would you like to save the excel book as: ")
-			# Generates a sheet title based on file location
+			save_as = raw_input("What would you like to save the excel book as, please include the file suffix: ")
 			title = ""
 			for i in range(len(file_location) - 1, 0, -1):
 				if ord(file_location[i]) == 92:  # A back slash in ascii
@@ -46,27 +102,7 @@ def main():
 			print("Sorry, I didn't understand that.")
 			continue
 
-	images = []
-
-	for img_file in files:
-		images.append(cv2.imread(img_file, 0))
-
-	width = images[1].shape[0]
-	height = images[1].shape[1]
-	center = (int(width // 2), int(height // 2))
-	radius = radius_finder(images, width, center)
-
-	rev_finder(images, radius, center)
-
-	c_len = rev_finder(images, radius, center)
-
-	for i in range(0, number_of_cycles):
-		vertex = vertex_generator(center, radius, c_len)
-		data = cube_generator(vertex, images, c_len, len(images))
-		slices = cube_slicer(data[0], c_len, vertex, data[1], ws)
-		#visualizer(images, data[1], slices, center, radius, c_len)
-
-	wb.save(save_as)
+	return wb, ws, save_as
 
 
 # This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
@@ -231,7 +267,7 @@ def slice_analyzer(slice_plane):
 	return(1 - (grain_space/float(len(slice_plane)))) * 100
 
 
-# Writes the porosity data to an excel file for further analysis
+# Writes the porosity data to an excel file
 def data_writer(ws, porosities, vertex, z_position, angle, counter=[0]):
 
 	counter[0] += 1
