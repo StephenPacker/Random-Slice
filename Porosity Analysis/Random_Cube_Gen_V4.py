@@ -21,7 +21,7 @@ def main():
 	radius = radius_finder(images, width, center)
 
 	# Will be based on some sort of REV calculation in the future
-	c_len = 301
+	c_len = 11
 
 	vertex = vertex_generator(center, radius, c_len)
 	cube = cube_generator(vertex, images, c_len, len(images))
@@ -130,12 +130,14 @@ def right_slice_builder(cube, slice_plane, current_increment, slope, slice_posit
 	max_slice = (c_len - 1) / 2
 
 	while loop_counter < max_slice:
-		if current_increment < slope:  # CI measures rows appended before moving horizontally.
+		if current_increment < slope:  # CI measures rows appended before moving horizontally
 			z_position += 1
 			current_increment += 1
 		else:
+			if slope != 0:  # Special clause to handle zero slope problems
+				z_position += 1
 			x_position += 1
-			current_increment = 0
+			current_increment = 1
 		for i in range(slice_position, slice_position + c_len):
 			slice_plane[i] = cube[z_position][i - slice_position][x_position]
 		slice_position += c_len
@@ -158,8 +160,10 @@ def left_slice_builder(cube, slice_plane, current_increment, slope, slice_positi
 			z_position -= 1
 			current_increment += 1
 		else:
+			if slope != 0:  # Special clause to handle zero slope problems
+				z_position -= 1
 			x_position -= 1
-			current_increment = 0
+			current_increment = 1
 		for i in range(slice_position - c_len, slice_position):
 			slice_plane[i] = cube[z_position][i - (slice_position - c_len)][x_position]
 		slice_position -= c_len
