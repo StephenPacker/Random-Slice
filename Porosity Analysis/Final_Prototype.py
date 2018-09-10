@@ -3,8 +3,7 @@
 # degree angles allowing for visualization and porosity measurements, which are then exported to an excel sheet. In the
 # second prototype, I have added a method to automatically compute a REV, added input validation, and re-worked the
 # excel functionally too allow the user to load in old sheets without rewriting existing data. In the final version, I
-# will be focusing on making improvements to the random slicer, allowing it to accurately slice in 360 degrees and
-# possibly altering the radius and REV finder algos to improve accuracy.
+# made improvements to the random slicer, allowing it to accurately slice in 360 degrees.
 
 import cv2
 import glob
@@ -43,12 +42,12 @@ def main():
 	center = (int(width // 2), int(height // 2))
 	radius = radius_finder(images, width, center)
 
-	# c_len = rev_finder(images, radius, center)
-	c_len = 11  # Value to be used for further testing
+	c_len = rev_finder(images, radius, center)
+	# c_len = 11  # Value to be used for further testing
 
 	# Ensures a odd cube size for the random slicer
 	if c_len % 2 == 0:
-		c_len += 1
+		c_len -= 1
 
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
@@ -140,8 +139,8 @@ def is_in_circle(center, radius, vertices):
 	return True
 
 
-# Generates a vertex and checks to make sure all points of a cube emanating from said vertex fit inside out data set
-# at which point a set of 4 vertices (the base of the cubic section, will be returned.
+# Generates a vertex and checks to make sure all points of a cube emanating from said vertex fit inside our data set
+# at which point a set of 4 vertices (the base of the cubic section) will be returned.
 def vertex_generator(center, radius, c_len):
 
 	# Edges are in reference to the perimeter of the circle delineating the data set boundary
@@ -183,32 +182,28 @@ def cube_generator(vertex, images, c_len, stack_height):
 	return data
 
 
-# This method takes in a ODD SIZED cube and mimics what a sliced plane through its volume would look like. Still a work
-# In progress, needs to implement the remainder system to increase accuracy, modify to work with angles between 90-180
-# And hopefully streamline the code to reduce redundancies of which there are a few.
+# This method takes in a odd sized cube and oversees the generation of various slice planes through it
 def cube_slicer(cube, c_len, vertex, z_position, ws):
 
 	porosities = []
 	slices = []
 
-	slice_plane = np.zeros([c_len**2])  # Try with a 1D array and then reshape it. Maybe easier?
+	slice_plane = np.zeros([c_len**2])
 	mid_point = ((c_len**2)/2) - (((c_len**2)/2)//c_len)  # Middle of a 1D array of length n*n
 	mid_indices = mid_point/c_len  # Middle of a 1D array of length n i.e an x,y,z array in 3D space
 
 	for i in range(mid_point, mid_point + c_len):
 		slice_plane[i] = cube[mid_indices][i - mid_point][mid_indices]  # Fill middle of plane with cubes values.
 
-	angles = [54, 20, 68]
+	angles = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165] # Default suite of angles
 	slopes = slope_generator(angles)
-
-	print(slopes)
 
 	current_increment = 1  # Since we already filled the middle row.
 
 	for i in range(0, len(slopes)):
-		slice_plane = right_slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point + c_len, mid_indices)
-		slice_plane = left_slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point, mid_indices)
+		slice_plane = slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point + c_len, mid_indices)
 
+		# Just Used For Visualization
 		slice_plane_copy = list(slice_plane)
 		slices.append(slice_plane_copy)
 
@@ -219,23 +214,25 @@ def cube_slicer(cube, c_len, vertex, z_position, ws):
 	return slices  # Will be used for visualization
 
 
-def right_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
+# Iterates through a cube, appending rows/cols to a slice plane in order to simulate angular slicing
+def slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
 
 	c_len = len(cube)
 	z_position = mid_indices
 	x_position = mid_indices
-
-	loop_counter = 0
 	max_slice = (c_len - 1) / 2
 
+	loop_counter = 0
 	decimal_tracker = 0
 
+	# Build the right hand side of the slice plane
+
 	while loop_counter < max_slice:
-		if current_increment < slope:  # CI measures rows appended before moving horizontally
+		if current_increment < abs(slope):  # CI measures rows appended before moving horizontally
 			z_position += 1
 			current_increment += 1
 		else:
-			if slope > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
+			if abs(slope) > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
 				decimal_tracker += 1
 			else:
 				decimal_tracker += math.modf(slope)[0]
@@ -245,30 +242,25 @@ def right_slice_builder(cube, slice_plane, current_increment, slope, slice_posit
 			x_position += 1
 			current_increment = 1
 		for i in range(slice_position, slice_position + c_len):
-			slice_plane[i] = cube[z_position][i - slice_position][x_position]
+			slice_plane[i] = cube[z_position][i - slice_position][
+				x_position if slope >= 0 else mid_indices - x_position]  # If slope is negative switch which side we do!
 		slice_position += c_len
 		loop_counter += 1
 
-	return slice_plane
-
-
-def left_slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
-
-	c_len = len(cube)
+	# Reset the loop position
+	slice_position = (slice_position - (loop_counter + 1) * c_len)
 	z_position = mid_indices
 	x_position = mid_indices
-
 	loop_counter = 0
-	max_slice = (c_len - 1) / 2
 
-	decimal_tracker = 0
+	# Build the left hand side of the slice plane
 
 	while loop_counter < max_slice:
-		if current_increment < slope:  # CI measures rows appended before moving horizontally.
+		if current_increment < abs(slope):  # CI measures rows appended before moving horizontally.
 			z_position -= 1
 			current_increment += 1
 		else:
-			if slope > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
+			if abs(slope) > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
 				decimal_tracker += 1
 			else:
 				decimal_tracker += math.modf(slope)[0]
@@ -278,14 +270,15 @@ def left_slice_builder(cube, slice_plane, current_increment, slope, slice_positi
 			x_position -= 1
 			current_increment = 1
 		for i in range(slice_position - c_len, slice_position):
-			slice_plane[i] = cube[z_position][i - (slice_position - c_len)][x_position]
+			slice_plane[i] = cube[z_position][i - (slice_position - c_len)][
+				x_position if slope >= 0 else mid_indices - x_position]  # If slope is negative switch which side we do!
 		slice_position -= c_len
 		loop_counter += 1
 
 	return slice_plane
 
 
-# Given an array of slopes, returns an array of slopes each angle produces
+# Given an array of angles, returns an array of slopes each angle produces
 def slope_generator(angles):
 
 	slopes = []
@@ -363,8 +356,8 @@ def rev_finder(images, radius, center):
 		line = [images[random_image][center[0]][center[1]]]
 		gi = 0  # Growth Incrementer
 
-		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 or\
-			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[0] - 1:
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 0.5 or\
+			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 0.5 and gi < center[0] - 1:
 
 			gi += 1
 			line.extend([images[random_image][center[0] - gi][center[1] - gi]])
