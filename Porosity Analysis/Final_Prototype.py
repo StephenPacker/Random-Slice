@@ -43,7 +43,8 @@ def main():
 	center = (int(width // 2), int(height // 2))
 	radius = radius_finder(images, width, center)
 
-	c_len = rev_finder(images, radius, center)
+	# c_len = rev_finder(images, radius, center)
+	c_len = 11  # Value to be used for further testing
 
 	# Ensures a odd cube size for the random slicer
 	if c_len % 2 == 0:
@@ -197,21 +198,23 @@ def cube_slicer(cube, c_len, vertex, z_position, ws):
 	for i in range(mid_point, mid_point + c_len):
 		slice_plane[i] = cube[mid_indices][i - mid_point][mid_indices]  # Fill middle of plane with cubes values.
 
-	slope = [0, 1, c_len]  # Mimic a 0, 45, 90 degree angle pairing
-	angle = [0, 45, 90]
+	angles = [54, 20, 68]
+	slopes = slope_generator(angles)
+
+	print(slopes)
 
 	current_increment = 1  # Since we already filled the middle row.
 
-	for i in range(0, len(slope)):
-		slice_plane = right_slice_builder(cube, slice_plane, current_increment, slope[i], mid_point + c_len, mid_indices)
-		slice_plane = left_slice_builder(cube, slice_plane, current_increment, slope[i], mid_point, mid_indices)
+	for i in range(0, len(slopes)):
+		slice_plane = right_slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point + c_len, mid_indices)
+		slice_plane = left_slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point, mid_indices)
 
 		slice_plane_copy = list(slice_plane)
 		slices.append(slice_plane_copy)
 
 		porosities.append(slice_analyzer(slice_plane))
 
-	data_writer(ws, porosities, vertex, z_position, angle)
+	data_writer(ws, porosities, vertex, z_position, angles)
 
 	return slices  # Will be used for visualization
 
@@ -225,13 +228,20 @@ def right_slice_builder(cube, slice_plane, current_increment, slope, slice_posit
 	loop_counter = 0
 	max_slice = (c_len - 1) / 2
 
+	decimal_tracker = 0
+
 	while loop_counter < max_slice:
 		if current_increment < slope:  # CI measures rows appended before moving horizontally
 			z_position += 1
 			current_increment += 1
 		else:
-			if slope != 0:  # Special clause to handle zero slope problems
+			if slope > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
+				decimal_tracker += 1
+			else:
+				decimal_tracker += math.modf(slope)[0]
+			if decimal_tracker >= 1:
 				z_position += 1
+				decimal_tracker -= 1
 			x_position += 1
 			current_increment = 1
 		for i in range(slice_position, slice_position + c_len):
@@ -251,13 +261,20 @@ def left_slice_builder(cube, slice_plane, current_increment, slope, slice_positi
 	loop_counter = 0
 	max_slice = (c_len - 1) / 2
 
+	decimal_tracker = 0
+
 	while loop_counter < max_slice:
 		if current_increment < slope:  # CI measures rows appended before moving horizontally.
 			z_position -= 1
 			current_increment += 1
 		else:
-			if slope != 0:  # Special clause to handle zero slope problems
+			if slope > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
+				decimal_tracker += 1
+			else:
+				decimal_tracker += math.modf(slope)[0]
+			if decimal_tracker >= 1:
 				z_position -= 1
+				decimal_tracker -= 1
 			x_position -= 1
 			current_increment = 1
 		for i in range(slice_position - c_len, slice_position):
@@ -266,6 +283,18 @@ def left_slice_builder(cube, slice_plane, current_increment, slope, slice_positi
 		loop_counter += 1
 
 	return slice_plane
+
+
+# Given an array of slopes, returns an array of slopes each angle produces
+def slope_generator(angles):
+
+	slopes = []
+
+	for angle in angles:
+		radian = math.radians(angle)
+		slopes.append(round(math.tan(radian), 3))
+
+	return slopes
 
 
 # Returns the porosity (non-zero pixels/ zero pixels) of a slice plane
