@@ -1,16 +1,13 @@
-# The final working prototype to fulfill my summer NSERC. The first prototype has the ability to read in a series of
-# CT images, find a dataset boundary, generate random cubes within the boundary, and slice the cubes at 0, 45, and 90
-# degree angles allowing for visualization and porosity measurements, which are then exported to an excel sheet. In the
-# second prototype, I have added a method to automatically compute a REV, added input validation, and re-worked the
-# excel functionally too allow the user to load in old sheets without rewriting existing data. In the final version, I
-# made improvements to the random slicer, allowing it to accurately slice in 360 degrees.
+# The final working prototype to fulfill my summer NSERC. This program reads in a series of CT images, finds a CIRCULAR
+# dataset boundary, generates random cubes within the boundary sized by an estimated REV computed for the sample (based
+# on total porosity) and slices the cubes at any angle between 0 and 360 degs. These angled slices through the cube are
+# measured for porosity, the subsequent values get exported to an excel sheet.
 
 import cv2
 import glob
 import numpy as np
 import math
 import random
-import matplotlib.pyplot as plt
 import openpyxl
 from openpyxl import load_workbook
 
@@ -19,10 +16,16 @@ from openpyxl import load_workbook
 # controls the creation of metadata about the image files (i.e boundaries of data sets, REV of a cube, and dimensions
 # of images) and finally handles the main loop of cube slicing and data processing.
 def main():
-
 	images_and_file_location = file_reader()
 	images = images_and_file_location[0]
 	file_location = images_and_file_location[1]
+
+	wb_ws_save = excel_handler(file_location)
+	wb = wb_ws_save[0]
+	ws = wb_ws_save[1]
+	save_as = wb_ws_save[2]
+
+	angles = (0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165)  # Default angles
 
 	while True:
 		try:
@@ -31,11 +34,16 @@ def main():
 			print("That was not a valid number....")
 			continue
 		break
-
-	wb_ws_save = excel_reader(file_location)
-	wb = wb_ws_save[0]
-	ws = wb_ws_save[1]
-	save_as = wb_ws_save[2]
+	while True:
+		try:
+			custom_angles = (raw_input("Would you like to input custom angles Y or N: "))
+			if custom_angles == "Y" or custom_angles == "y":
+				angles = raw_input("What angles would you like to slice on: ")
+				angles = map(int, angles.split())
+		except ValueError:
+			print("These are not valid angles")
+			continue
+		break
 
 	width = images[1].shape[0]
 	height = images[1].shape[1]
@@ -43,24 +51,21 @@ def main():
 	radius = radius_finder(images, width, center)
 
 	c_len = rev_finder(images, radius, center)
-	# c_len = 11  # Value to be used for further testing
 
-	# Ensures a odd cube size for the random slicer
+	# Ensures a odd cube size for the random slicer (Required for a correct random slice procedure to occur).
 	if c_len % 2 == 0:
 		c_len -= 1
 
 	for i in range(0, number_of_cycles):
 		vertex = vertex_generator(center, radius, c_len)
 		data = cube_generator(vertex, images, c_len, len(images))
-		slices = cube_slicer(data[0], c_len, vertex, data[1], ws)
-		#visualizer(images, data[1], slices, center, radius, c_len)
+		cube_slicer(data[0], c_len, vertex, data[1], ws, angles)
 
 	wb.save(save_as)
 
 
 # Reads in image files specified by the users
 def file_reader():
-
 	while True:
 		file_location = raw_input("Please specify the file path to where your images are stored: ")
 		file_type = raw_input("Please specify the file type. I.e bmp: ")
@@ -77,24 +82,30 @@ def file_reader():
 
 
 # Loads in a pre existing excel file or creates a new one for writing based on user input
-def excel_reader(file_location):
+def excel_handler(file_location):
+	valid_file = False
 
-	while True:
+	while not valid_file:
 		old_excel = raw_input("Would you like to use an existing excel file Y OR N: ")
-		if old_excel == "Y":
-			while True:
-				excel_file = raw_input("Please specify the file name with proper suffix i.e sheet1.xlsx: ")
-				try:
-					wb = load_workbook(excel_file)
-					ws = wb.create_sheet(wb.worksheets[0].title + " %s" % (len(wb.worksheets)))
-					save_as = excel_file
-					break
-				except IOError:
-					print("Your specified file does not exist, please try again")
-			break
-		elif old_excel == "N":
+		if old_excel == "Y" or old_excel == "y":
+			excel_file = raw_input("Please specify the file name with proper suffix i.e sheet1.xlsx: ")
+			try:
+				wb = load_workbook(excel_file)
+				ws = wb.create_sheet(wb.worksheets[0].title + " %s" % (len(wb.worksheets)))
+				save_as = excel_file
+				valid_file = True
+			except IOError:
+				print("Your specified file does not exist, please try again")
+
+		elif old_excel == "N" or old_excel == "n":
+			valid_file = True
 			wb = openpyxl.Workbook()
-			save_as = raw_input("What would you like to save the excel book as, please include the file suffix: ")
+			save_as = raw_input("What would you like to save the excel book as: ")
+			save_as = save_as + ".xlsx"
+			for chars in save_as:
+				if chars in [':', '*', '?', '"', '<', '>', '|'] or ord(chars) == 92 or ord(chars) == 47:
+					print("This is not a valid file name, it contains a :,*,?,<,>,|,/ etc. ")
+					valid_file = False
 			title = ""
 			for i in range(len(file_location) - 1, 0, -1):
 				if ord(file_location[i]) == 92:  # A back slash in ascii
@@ -102,7 +113,6 @@ def excel_reader(file_location):
 				title += file_location[i]
 			ws = wb.active
 			ws.title = title[::-1]
-			break
 
 		else:
 			print("Sorry, I didn't understand that.")
@@ -111,18 +121,17 @@ def excel_reader(file_location):
 	return wb, ws, save_as
 
 
-# This Method returns a radius such that everything within the circle is of the imaged data (i.e puts a upper limit on
+# Returns a radius such that everything within the circle is part of the imaged sample (i.e puts a upper limit on
 # the boundary of our CT data) ensuring that we do not included any invalid pixels during future computations.
 def radius_finder(images, width, center):
-
 	radii = []
 
-	for i in range(0, len(images), int(math.floor(len(images) // 10))):
+	for i in range(0, len(images), int(math.floor(len(images) // 10))):  # Take one measurement each tenth
 		width_index = width
 		cur_i = images[i]
-		cur_p = cur_i[center[1], width - 1]
+		cur_p = cur_i[center[1], width - 1]  # Start on the right hand boundary
 
-		while cur_p == 0 and width_index > 0:
+		while cur_p == 0 and width_index > 0:  # Continue iterating until we hit our data set, maxes out at left edge
 			width_index -= 1
 			cur_p = cur_i[center[1], width_index]
 		radii.append(width_index - center[0])
@@ -132,7 +141,6 @@ def radius_finder(images, width, center):
 
 # Determines whether a pixel (x,y co-ord) is within the range of a circle delimiting the boundary of our data set.
 def is_in_circle(center, radius, vertices):
-
 	for i in range(0, len(vertices)):
 		if np.sqrt((vertices[i][0] - center[0]) ** 2 + (vertices[i][1] - center[1]) ** 2) > radius:
 			return False
@@ -140,9 +148,9 @@ def is_in_circle(center, radius, vertices):
 
 
 # Generates a vertex and checks to make sure all points of a cube emanating from said vertex fit inside our data set
-# at which point a set of 4 vertices (the base of the cubic section) will be returned.
+# at which point a set of 4 vertices (the base of the cubic section) will be returned. This code will only get stuck
+# if there are no cubes (within reason) with c_len = rev that fit in the given data set.
 def vertex_generator(center, radius, c_len):
-
 	# Edges are in reference to the perimeter of the circle delineating the data set boundary
 	left_edge = center[0] - radius
 	right_edge = center[0] + radius
@@ -150,22 +158,28 @@ def vertex_generator(center, radius, c_len):
 	adders = [[0, 0], [0, c_len], [c_len, 0], [c_len, c_len]]
 
 	vertices_in_circle = False
+	loop_counter = 0
 
-	while not vertices_in_circle:
+	while not vertices_in_circle and loop_counter < 50000:
+		loop_counter += 1
 		vertices = []
 		bottom_left_coord = [random.randrange(left_edge, right_edge), random.randrange(left_edge, right_edge)]
 		for i in range(4):
 			vertices.append([a + b for a, b in zip(bottom_left_coord, adders[i])])
 		vertices_in_circle = is_in_circle(center, radius, vertices)
 
+	if loop_counter >= 50000:
+		print("This dataset is incomparable with the program, i.e there are no cubes of side length c_len that will fit"
+		      "within the provided image data. PLease try again with a larger and more regular image set if possible. ")
+		exit()
+
 	return vertices[0]
 
 
 # Generates a cubic section within the dataset given a vertex
 def cube_generator(vertex, images, c_len, stack_height):
-
-	upper_3D_bound = stack_height - c_len
-	z_position = random.randrange(0, upper_3D_bound)
+	upper_3d_bound = stack_height - c_len
+	z_position = random.randrange(0, upper_3d_bound)
 
 	cube = np.zeros([c_len, c_len, c_len], int)
 	x1 = vertex[0]
@@ -183,40 +197,29 @@ def cube_generator(vertex, images, c_len, stack_height):
 
 
 # This method takes in a odd sized cube and oversees the generation of various slice planes through it
-def cube_slicer(cube, c_len, vertex, z_position, ws):
-
+def cube_slicer(cube, c_len, vertex, z_position, ws, angles):
 	porosities = []
-	slices = []
 
-	slice_plane = np.zeros([c_len**2])
-	mid_point = ((c_len**2)/2) - (((c_len**2)/2)//c_len)  # Middle of a 1D array of length n*n
-	mid_indices = mid_point/c_len  # Middle of a 1D array of length n i.e an x,y,z array in 3D space
+	slice_plane = np.zeros([c_len ** 2])
+	mid_point = ((c_len ** 2) / 2) - (((c_len ** 2) / 2) // c_len)  # Middle of a 1D array of length n*n
+	mid_indices = mid_point / c_len  # Middle of a 1D array of length n i.e an x,y or z array in 3D space
 
 	for i in range(mid_point, mid_point + c_len):
 		slice_plane[i] = cube[mid_indices][i - mid_point][mid_indices]  # Fill middle of plane with cubes values.
 
-	angles = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165] # Default suite of angles
 	slopes = slope_generator(angles)
 
 	current_increment = 1  # Since we already filled the middle row.
 
 	for i in range(0, len(slopes)):
 		slice_plane = slice_builder(cube, slice_plane, current_increment, slopes[i], mid_point + c_len, mid_indices)
-
-		# Just Used For Visualization
-		slice_plane_copy = list(slice_plane)
-		slices.append(slice_plane_copy)
-
 		porosities.append(slice_analyzer(slice_plane))
 
 	data_writer(ws, porosities, vertex, z_position, angles)
 
-	return slices  # Will be used for visualization
-
 
 # Iterates through a cube, appending rows/cols to a slice plane in order to simulate angular slicing
 def slice_builder(cube, slice_plane, current_increment, slope, slice_position, mid_indices):
-
 	c_len = len(cube)
 	z_position = mid_indices
 	x_position = mid_indices
@@ -235,7 +238,7 @@ def slice_builder(cube, slice_plane, current_increment, slope, slice_position, m
 			if abs(slope) > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
 				decimal_tracker += 1
 			else:
-				decimal_tracker += math.modf(slope)[0]
+				decimal_tracker += math.modf(abs(slope))[0]
 			if decimal_tracker >= 1:
 				z_position += 1
 				decimal_tracker -= 1
@@ -263,7 +266,7 @@ def slice_builder(cube, slice_plane, current_increment, slope, slice_position, m
 			if abs(slope) > 0 and slope % 1 == 0:  # Ensures whole #'s get incremented in z
 				decimal_tracker += 1
 			else:
-				decimal_tracker += math.modf(slope)[0]
+				decimal_tracker += math.modf(abs(slope))[0]
 			if decimal_tracker >= 1:
 				z_position -= 1
 				decimal_tracker -= 1
@@ -278,9 +281,8 @@ def slice_builder(cube, slice_plane, current_increment, slope, slice_position, m
 	return slice_plane
 
 
-# Given an array of angles, returns an array of slopes each angle produces
+# Given an array of angles, returns the corresponding slopes each angle produces
 def slope_generator(angles):
-
 	slopes = []
 
 	for angle in angles:
@@ -292,14 +294,12 @@ def slope_generator(angles):
 
 # Returns the porosity (non-zero pixels/ zero pixels) of a slice plane
 def slice_analyzer(slice_plane):
-
 	grain_space = np.count_nonzero(slice_plane)
-	return(1 - (grain_space/float(len(slice_plane)))) * 100
+	return (1 - (grain_space / float(len(slice_plane)))) * 100
 
 
 # Writes the porosity data to an excel file
 def data_writer(ws, porosities, vertex, z_position, angle, counter=[0]):
-
 	counter[0] += 1
 
 	# If its the first time opening the sheet, write the angle information on the top row
@@ -313,30 +313,9 @@ def data_writer(ws, porosities, vertex, z_position, angle, counter=[0]):
 		ws.cell(row=counter[0] + 1, column=i + 1).value = porosities[i - 1]
 
 
-# Visualizes the middle section of a cube, followed by three angled sections.
-def visualizer(images, z_position, slices, center, radius, c_len):
-
-	angle = [0, 45, 90]
-
-	cv2.circle(images[z_position + c_len/2], center, radius, 255)
-
-	plt.subplot(2, 2, 1)
-	plt.title("CT Image with circular border")
-	plt.imshow(images[z_position + c_len/2], cmap='gray')
-
-	for i in range(0, len(slices)):
-		plt.subplot(2, 2, i + 2)
-		plt.title("Slice at %i degrees" % angle[i])
-		np.reshape(slices[i], [c_len, c_len])
-		plt.imshow(np.reshape(slices[i], [c_len, c_len]), cmap='gray')
-
-	plt.show()
-
-
 # Returns a approximate REV which I will use as the length of my cubes. Based on a line growing algorithm, which is
 # rooted in the assumption that a 1D REV will translate in a 3D system, which will work for homogeneous samples only.
 def rev_finder(images, radius, center):
-
 	total_nonzero_pix = 0
 
 	# Count total porosity for the data set
@@ -356,9 +335,8 @@ def rev_finder(images, radius, center):
 		line = [images[random_image][center[0]][center[1]]]
 		gi = 0  # Growth Incrementer
 
-		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 0.5 or\
-			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 0.5 and gi < center[0] - 1:
-
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 0.5 or \
+				por_calc(np.count_nonzero(line), len(line)) > total_porosity + 0.5 and gi < center[0] - 1:
 			gi += 1
 			line.extend([images[random_image][center[0] - gi][center[1] - gi]])
 			line.extend([images[random_image][center[0] + gi][center[1] + gi]])
@@ -370,7 +348,7 @@ def rev_finder(images, radius, center):
 
 # Given total bright and dark pixels of an image(s), returns the porosity as a percentage
 def por_calc(bright_pixels, total_pixels):
-	return (1 - (bright_pixels/float(total_pixels))) * 100
+	return (1 - (bright_pixels / float(total_pixels))) * 100
 
 
 main()
