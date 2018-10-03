@@ -26,6 +26,7 @@ def main():
 	save_as = wb_ws_save[2]
 
 	angles = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165]  # Default angles
+	# angles = [i for i in range(182)]
 
 	while True:
 		try:
