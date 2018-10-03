@@ -25,7 +25,7 @@ def main():
 	ws = wb_ws_save[1]
 	save_as = wb_ws_save[2]
 
-	angles = (0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165)  # Default angles
+	angles = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165]  # Default angles
 
 	while True:
 		try:
@@ -247,7 +247,7 @@ def slice_builder(cube, slice_plane, current_increment, slope, slice_position, m
 			current_increment = 1
 		for i in range(slice_position, slice_position + c_len):
 			slice_plane[i] = cube[z_position][i - slice_position][
-				x_position if slope >= 0 else mid_indices - x_position]  # If slope is negative switch which side we do!
+				x_position if slope >= 0 else c_len - x_position]  # If slope is negative switch which side we do!
 		slice_position += c_len
 		loop_counter += 1
 
@@ -275,7 +275,7 @@ def slice_builder(cube, slice_plane, current_increment, slope, slice_position, m
 			current_increment = 1
 		for i in range(slice_position - c_len, slice_position):
 			slice_plane[i] = cube[z_position][i - (slice_position - c_len)][
-				x_position if slope >= 0 else mid_indices - x_position]  # If slope is negative switch which side we do!
+				x_position if slope >= 0 else c_len - x_position]  # If slope is negative switch which side we do!
 		slice_position -= c_len
 		loop_counter += 1
 
@@ -336,14 +336,15 @@ def rev_finder(images, radius, center):
 		line = [images[random_image][center[0]][center[1]]]
 		gi = 0  # Growth Incrementer
 
-		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 or \
-			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[1] - 2:
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 and gi < center[1] - 1 or \
+			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[1] - 1:
 			gi += 1
 			line.extend([images[random_image][center[0]][center[1] - gi]])
 			line.extend([images[random_image][center[0]][center[1] + gi]])
 
 		line_holder.append(len(line))
 
+	print(sum(line_holder) / len(line_holder))
 	return sum(line_holder) / len(line_holder)
 
 
