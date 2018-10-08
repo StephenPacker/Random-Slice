@@ -12,53 +12,53 @@ def main():
 
 	images = file_reader()
 
-	porosities = np.empty(len(images))
+	porosities = []
 
-	for i in range(len(images)):
+	counter = 0
+
+	for i in range(0, len(images), 500):
+		counter += 1
 		total_img_pixels = 0
 		total_shape_pixels = 0
 		shape = shape_outliner(images[i])
 		total_img_pixels += np.count_nonzero(images[i])
 		total_shape_pixels += np.count_nonzero(shape)
-		porosities[i] = por_calc(total_img_pixels, total_shape_pixels)
+		porosities.append(por_calc(total_img_pixels, total_shape_pixels))
 
-	porosity_avg = 0
+	porosities = np.array(porosities)
 
-	for j in range(len(porosities)):
-		porosity_avg += porosities[j]
-
-	print(porosity_avg/len(porosities))
+	print(np.average(porosities))
 
 
 # Absolutely brute force implementation that transposes the outline or shape of our data set onto a blank array that
 # can be referenced as an alternative to assuming all objects are circular in form. Essentially carves the general shape
-# Into a new 3D array! If run time is already slow, then fuck it!
+# Into a new 2D array! If run time is already slow, then fuck it!
 def shape_outliner(image):
 
-	width = image.shape[0]
-	height = image.shape[1]
-	shape = np.ones((width, height), dtype=int)
+	height = image.shape[0]
+	width = image.shape[1]
+	shape = np.ones((height, width), dtype=int)
 	cur_i = image
 
 	# Move left to right
 	for j in range(0, height):
 		width_index = width - 1
 		height_index = j
-		cur_p = cur_i[width_index, height_index]
+		cur_p = cur_i[height_index, width_index]
 		while cur_p == 0 and width_index > 0:
 			width_index -= 1
-			cur_p = cur_i[width_index, height_index]
-			shape[width_index, height_index] = 0
+			cur_p = cur_i[height_index, width_index]
+			shape[height_index, width_index] = 0
 
 	# Move right to left
 	for j in range(0, height):
 		width_index = 0
 		height_index = j
-		cur_p = cur_i[width_index, height_index]
+		cur_p = cur_i[height_index, width_index]
 		while cur_p == 0 and width_index < width - 1:
 			width_index += 1
-			cur_p = cur_i[width_index, height_index]
-			shape[width_index, height_index] = 0
+			cur_p = cur_i[height_index, width_index]
+			shape[height_index, width_index] = 0
 
 	shape = cv2.medianBlur(shape.astype(np.float32), 5)
 
