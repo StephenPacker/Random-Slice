@@ -1,7 +1,7 @@
 # This volume counter is designed to work with essentially any shape, assuming the scan only has one sample, and
 # that the sample is relatively closed (Picture pouring water on top of the provided images, if the water flows around
 # the image that means the volume counter should be accurate, if the water flows though the image the accuracy will
-# likely be much lower). In exchange for generality of shape, the computation time is much slower. Test
+# likely be much lower). In exchange for generality of shape, the computation time is much slower.
 
 import glob
 import cv2
