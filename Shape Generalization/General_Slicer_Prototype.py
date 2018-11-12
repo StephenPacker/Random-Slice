@@ -312,7 +312,7 @@ def data_writer(ws, porosities, vertex, z_position, angle, counter=[0]):
 
 	# If its the first time opening the sheet, write the angle information on the top row
 	if counter[0] == 1:
-		ws.cell(row=1, column=1).value = "Angle"
+		ws.cell(row=1, column=1).value = "Angle (x, y, z)"
 		for i in range(1, len(angle) + 1):
 			ws.cell(row=1, column=i + 1).value = angle[i - 1]
 
@@ -353,8 +353,8 @@ def rev_finder(images, total_porosity, center):
 		line = [images[random_image][center[0]][center[1]]]
 		gi = 0  # Growth Incrementer
 
-		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 and gi < center[1] - 1 or \
-			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[1] - 1:
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 0.5 and gi < center[1] - 1 or \
+			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 0.5 and gi < center[1] - 1:
 			gi += 1
 			line.extend([images[random_image][center[0]][center[1] - gi]])
 			line.extend([images[random_image][center[0]][center[1] + gi]])

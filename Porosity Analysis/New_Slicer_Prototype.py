@@ -360,8 +360,8 @@ def rev_finder(images, radius, center):
 		line = [images[random_image][center[0]][center[1]]]
 		gi = 0  # Growth Incrementer
 
-		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 and gi < center[1] - 1 or \
-			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[1] - 1:
+		while por_calc(np.count_nonzero(line), len(line)) < total_porosity - 1 and gi < center[1] - 0.5 or \
+			por_calc(np.count_nonzero(line), len(line)) > total_porosity + 1 and gi < center[1] - 0.5:
 			gi += 1
 			line.extend([images[random_image][center[0]][center[1] - gi]])
 			line.extend([images[random_image][center[0]][center[1] + gi]])
